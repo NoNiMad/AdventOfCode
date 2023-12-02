@@ -1,10 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
+import { Bench } from "tinybench";
 
 function noop() {}
 function parseArgs(args)
 {
-	const result = {};
+	const result = { parts: { all: true } };
 
 	for (const arg of args)
 	{
@@ -14,28 +15,37 @@ function parseArgs(args)
 			const option = arg.substring(1);
 			switch (option)
 			{
-				case "t":
-				case "test":
-					result.testInput = true;
+				case "b":
+				case "benchmark":
+					result.benchmark = new Bench();
+					break;
 				case "d":
 				case "debug":
 					result.debug = true;
 					break;
+				case "g1":
+					result.parts.all = false;
+					result.parts.golf1 = true;
+					break;
+				case "g2":
+					result.parts.all = false;
+					result.parts.golf2 = true;
+					break;
 				case "p1":
-					result.specificParts = true;
-					result.part1 = true;
+					result.parts.all = false;
+					result.parts.part1 = true;
 					break;
 				case "p2":
-					result.specificParts = true;
-					result.part2 = true;
+					result.parts.all = false;
+					result.parts.part2 = true;
 					break;
 				case "s":
 				case "save":
 					result.save = true;
 					break;
-				case "g":
-				case "golf":
-					result.golf = true;
+				case "t":
+				case "test":
+					result.testInput = true;
 					break;
 				default:
 					log(`Unrecognized option: "${option}"`);
@@ -86,12 +96,43 @@ function assignToDayData(data, obj)
 	Object.assign(dayData, obj);
 }
 
+function loadInput(filePath)
+{
+	let input = fs.readFileSync(filePath, "utf8");
+	
+	let hasBeenSanitized = false;
+	if (input.includes("\r\n"))
+	{
+		input = input.replaceAll("\r\n", "\n");
+		hasBeenSanitized = true;
+	}
+	if (input.endsWith("\n"))
+	{
+		input = input.slice(0, input.length - 1);
+		hasBeenSanitized = true;
+	}
+
+	if (hasBeenSanitized)
+	{
+		log("Input has been sanitized.");
+		fs.writeFileSync(filePath, input, "utf8");
+	}
+	return input;
+}
+
 function executePart(label, partFunction, input, successCb)
 {
-	log(`--------\n ${label} \n--------\n`);
+	if (args.benchmark)
+	{
+		args.benchmark.add(label, () => {
+			partFunction(input);
+		});
+		return;
+	}
 
 	try
 	{
+		log(`--------\n ${label} \n--------\n`);
 		const result = partFunction(input);
 		log(`Result: ${result}`);
 		successCb(result);
@@ -117,63 +158,64 @@ async function main(args)
 		return;
 	}
 	const script = await import(`file://${scriptPath}`);
-	const input = fs.readFileSync(inputPath, "utf8");
+	const input = loadInput(inputPath);
 
-	if (!args.golf)
+	if (args.parts.all || args.parts.part1)
 	{
-		if (!args.specificParts || args.part1)
+		executePart("Part 1", script.part1, input, result => assignToDayData(data, { part1: result }));
+	}
+
+	if (args.parts.all || args.parts.part2)
+	{
+		executePart("Part 2", script.part2, input, result => assignToDayData(data, { part2: result }));
+	}
+
+	if (args.parts.all || args.parts.golf1)
+	{
+		const nonGolfResult = data[args.day]?.part1;
+		if (!nonGolfResult)
 		{
-			executePart("Part 1", script.part1, input, result => assignToDayData(data, { part1: result }));
+			log(`Do the non-golf version first you funny bastard.`);
 		}
-	
-		if (!args.specificParts || args.part2)
+		else
 		{
-			executePart("Part 2", script.part2, input, result => assignToDayData(data, { part2: result }));
+			executePart("Part 1 (Golf)", script.part1Golf, input, result => {
+				log(`Non golf-result: ${nonGolfResult}`);
+				log(`Golf result: ${result}`);
+				log(`=> ${result == nonGolfResult ? "GG!" : "Oops."}`);
+			});
 		}
-		log("\n--------");
+	}
+
+	if (args.parts.all || args.parts.golf2)
+	{
+		const nonGolfResult = data[args.day]?.part2;
+		if (!nonGolfResult)
+		{
+			log(`Do the non-golf version first you funny bastard.`);
+		}
+		else
+		{
+			executePart("Part 2 (Golf)", script.part2Golf, input, result => {
+				log(`Non golf-result: ${nonGolfResult}`);
+				log(`Golf result: ${result}`);
+				log(`=> ${result == nonGolfResult ? "GG!" : "Oops."}`);
+			});
+		}
+	}
+
+	if (args.benchmark)
+	{
+		await args.benchmark.run();
+		console.table(args.benchmark.table());
 	}
 	else
 	{
-		if (!args.specificParts || args.part1)
+		if (args.save)
 		{
-			const nonGolfResult = data[args.day]?.part1;
-			if (!nonGolfResult)
-			{
-				log(`Do the non-golf version first you funny bastard.`);
-			}
-			else
-			{
-				executePart("Part 1 (Golf)", script.part1Golf, input, result => {
-					log(`Non golf-result: ${nonGolfResult}`);
-					log(`Golf result: ${result}`);
-					log(`=> ${result == nonGolfResult ? "GG!" : "Oops."}`);
-				});
-			}
+			fs.writeFileSync(dataFilePath, JSON.stringify(data, null, "\t"));
+			log("Saved!");
 		}
-	
-		if (!args.specificParts || args.part2)
-		{
-			const nonGolfResult = data[args.day]?.part2;
-			if (!nonGolfResult)
-			{
-				log(`Do the non-golf version first you funny bastard.`);
-			}
-			else
-			{
-				executePart("Part 2 (Golf)", script.part2Golf, input, result => {
-					log(`Non golf-result: ${nonGolfResult}`);
-					log(`Golf result: ${result}`);
-					log(`=> ${result == nonGolfResult ? "GG!" : "Oops."}`);
-				});
-			}
-		}
-		log("\n--------");
-	}
-
-	if (args.save)
-	{
-		fs.writeFileSync(dataFilePath, JSON.stringify(data, null, "\t"));
-		log("Saved!");
 	}
 }
 

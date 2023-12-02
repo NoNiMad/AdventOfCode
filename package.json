@@ -1,3 +1,6 @@
 {
-	"type": "module"
+	"type": "module",
+	"dependencies": {
+		"tinybench": "^2.5.1"
+	}
 }
