@@ -79,7 +79,7 @@ export function part2(input)
 
 export function part1Golf(i)
 {
-	return i.split("\n").map(l=>[...l].filter(c=>c>"/"&&c<":")).reduce((s,l)=>s+(+l[0])*10+(+l[l.length-1]),0);
+	return -i.split("\n").map(l=>[...l].filter(c=>c>"/"&&c<":")).reduce((s,l)=>s-l[0]*10-l[l.length-1],0);
 }
 
 export function part2Golf(i)
