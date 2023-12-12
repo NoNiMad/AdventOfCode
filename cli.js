@@ -139,7 +139,7 @@ function executePart(label, partFunction, input, successCb)
 	}
 	catch(exception)
 	{
-		error(`Error during execution: ${exception}`);
+		error(`Error during execution: ${exception.stack}`);
 	}
 }
 
